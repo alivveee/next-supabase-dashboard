@@ -1,7 +1,7 @@
 "use server";
 import { readUserSession } from "@/lib/actions";
 import { createSupbaseAdmin, createSupbaseServerClient } from "@/lib/supabase";
-import { unstable_noStore } from "next/cache";
+import { revalidatePath, unstable_noStore } from "next/cache";
 
 export async function createMember(data: {
   name: string;
@@ -13,6 +13,7 @@ export async function createMember(data: {
 }) {
   const { data: userSession } = await readUserSession();
 
+  // admin only
   if (userSession.session?.user?.user_metadata.role !== "admin") {
     return JSON.stringify({ error: { message: "You are not allowed to do this!" } });
   }
@@ -47,7 +48,7 @@ export async function createMember(data: {
         member_id: createResult.data?.user?.id,
         status: data.status,
       });
-
+      revalidatePath("dasboard/member");
       return JSON.stringify(permissionResult);
     }
   }
@@ -55,7 +56,7 @@ export async function createMember(data: {
 export async function updateMemberById(id: string) {
   console.log("update member");
 }
-export async function deleteMemberById(id: string) {
+export async function deleteMemberById(user_id: string) {
   const { data: userSession } = await readUserSession();
 
   //Admin only
@@ -63,24 +64,18 @@ export async function deleteMemberById(id: string) {
     return JSON.stringify({ error: { message: "You are not allowed to do this!" } });
   }
 
-  const supabase = await createSupbaseAdmin();
+  const supabaseAdmin = await createSupbaseAdmin();
 
-  const deleteResult = await supabase.auth.admin.deleteUser(id);
+  const deleteResult = await supabaseAdmin.auth.admin.deleteUser(user_id);
 
   if (deleteResult.error?.message) {
     return JSON.stringify(deleteResult);
   } else {
     //delete member
-    const memberResult = await supabase.from("member").delete().eq("id", id);
-
-    if (memberResult.error?.message) {
-      return JSON.stringify(memberResult);
-    } else {
-      //delete permissions
-      const permissionResult = await supabase.from("permission").delete().eq("member_id", id);
-
-      return JSON.stringify(permissionResult);
-    }
+    const supabase = await createSupbaseServerClient();
+    const memberResult = await supabase.from("member").delete().eq("id", user_id);
+    revalidatePath("dasboard/member");
+    return JSON.stringify(memberResult);
   }
 }
 export async function readMembers() {

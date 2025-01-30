@@ -18,8 +18,8 @@ npm run dev
 ## Check list
 -   [x] setup supbase fill env.sample
 -   [x] create developer user
--   [ ] handle create user using service role
--   [ ] Prevent UI from none admin
+-   [x] handle create user using service role
+-   [x] Prevent UI from none admin
 -   [ ] update create user for only admin to create only
 -   [ ] read user
 -   [ ] update user
