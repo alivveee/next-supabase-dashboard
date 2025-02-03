@@ -37,6 +37,7 @@ export async function createMember(data: {
     const memberResult = await supabase.from("member").insert({
       name: data.name,
       id: createResult.data?.user?.id,
+      email: data.email,
     });
 
     if (memberResult.error?.message) {
@@ -53,8 +54,84 @@ export async function createMember(data: {
     }
   }
 }
-export async function updateMemberById(id: string) {
-  console.log("update member");
+export async function updateBasicMemberById(id: string, data: { name: string }) {
+  const supabase = await createSupbaseServerClient();
+
+  const result = await supabase.from("member").update(data).eq("id", id);
+  revalidatePath("dasboard/member");
+  return JSON.stringify(result);
+}
+export async function updateAdvanceMemberById(
+  permission_id: string,
+  user_id: string,
+  data: { role: "admin" | "user"; status: "active" | "resigned" }
+) {
+  const { data: userSession } = await readUserSession();
+
+  // admin only
+  if (userSession.session?.user?.user_metadata.role !== "admin") {
+    return JSON.stringify({ error: { message: "You are not allowed to do this!" } });
+  }
+
+  const supabaseAdmin = await createSupbaseAdmin();
+
+  //update account
+  const updateResult = await supabaseAdmin.auth.admin.updateUserById(user_id, {
+    user_metadata: {
+      role: data.role,
+    },
+  });
+
+  if (updateResult.error?.message) {
+    return JSON.stringify(updateResult);
+  } else {
+    const supabase = await createSupbaseServerClient();
+    const result = await supabase.from("permission").update(data).eq("id", permission_id);
+    revalidatePath("dasboard/member");
+    return JSON.stringify(result);
+  }
+}
+export async function updateAccountMemberById(
+  user_id: string,
+  data: {
+    email: string;
+    password?: string | undefined;
+    confirm?: string | undefined;
+  }
+) {
+  const { data: userSession } = await readUserSession();
+
+  // admin only
+  if (userSession.session?.user?.user_metadata.role !== "admin") {
+    return JSON.stringify({ error: { message: "You are not allowed to do this!" } });
+  }
+
+  let updateObject: {
+    email: string;
+    password?: string | undefined;
+    confirm?: string | undefined;
+  } = { email: data.email };
+
+  if (data.password && data.confirm) {
+    updateObject["password"] = data.password;
+  }
+
+  const supabaseAdmin = await createSupbaseAdmin();
+
+  //update account
+  const updateResult = await supabaseAdmin.auth.admin.updateUserById(user_id, updateObject);
+  if (updateResult.error?.message) {
+    return JSON.stringify(updateResult);
+  } else {
+    //update member
+    const supabase = await createSupbaseServerClient();
+    const memberResult = await supabase
+      .from("member")
+      .update({ email: data.email })
+      .eq("id", user_id);
+    revalidatePath("dasboard/member");
+    return JSON.stringify(memberResult);
+  }
 }
 export async function deleteMemberById(user_id: string) {
   const { data: userSession } = await readUserSession();
